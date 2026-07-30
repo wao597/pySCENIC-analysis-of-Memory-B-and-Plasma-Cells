@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
 02_celltype_annotation.py
-
-1. Concatenate all 8 QC'd donor h5ads.
-2. Score Memory B cell vs Plasma cell marker sets per Leiden cluster, assign labels.
-3. Subset to those two cell types only -> write per-donor, per-celltype h5ads
-   (these feed step 3, pySCENIC).
-4. Quick EDA: cell-type proportions and PCA by sex/age (saved as PNGs).
+This script merges Azimuth labels  back into the QC'd h5ad files then:
+  - Filters to high-confidence cells (predicted.celltype.l2.score > 0.5)
+  - Subsets to Memory B cells and Plasma cells
+  - Writes per-donor/per-celltype h5ads for pySCENIC
+  - Writes combined_annotated.h5ad for pseudobulk DE
+  - Generates EDA plots
 
 Usage:
     python 02_celltype_annotation.py --qc_dir ./qc_out --outdir ./celltype_out
