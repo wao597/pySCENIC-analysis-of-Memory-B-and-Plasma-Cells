@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # 00_run_cellranger.sh
 #
-# Auto-discovers all fastq "sample" names per donor inside --fastqs dir
+# This script finds fastq "sample" names per donor inside --fastqs dir
 # (e.g. MantonBM1_HiSeq_1, MantonBM1_HiSeq_5, ...) and runs ONE cellranger
-# count job per donor combining all of that donor's runs, exactly like
-# Dominic's example for BM1, but generalised to all 8 donors.
+# count job per donor combining all of that donor's runs.
 #
 # Usage:
 #   ./00_run_cellranger.sh /path/to/all_samples /path/to/refdata-gex-GRCh38-2024-A /path/to/outdir
