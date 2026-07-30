@@ -23,6 +23,9 @@ cisTarget databases: hg38 feather ranking databases (pySCENIC resources, availab
 Motif table: motifs-v10nr_clust-nr.hgnc-m0.001-o0.0.tbl
 
 
+**Scripts:**
+
+
 Scripts should be run in the following order. Each step depends on the outputs of the previous step.
 
 
