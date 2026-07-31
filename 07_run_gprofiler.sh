@@ -29,10 +29,9 @@ OUTDIR="/rds/projects/r/russdr-bb-data/wao597/gprofiler_out"
 mkdir -p "$OUTDIR"
 
 # Confirming gprofiler is available
-echo "=== Checking gprofiler-official package ==="
 python -c "from gprofiler import GProfiler; print('gprofiler ok')"
 
-echo "=== Starting g:Profiler enrichment ==="
+
 python 07_gprofiler_enrichment.py \
     --lasso_dir "$LASSO_DIR" \
     --de_csv "$DE_CSV" \
@@ -42,4 +41,4 @@ python 07_gprofiler_enrichment.py \
     --n_de 200 \
     --top_terms 15
 
-echo "=== g:Profiler enrichment complete ==="
+
