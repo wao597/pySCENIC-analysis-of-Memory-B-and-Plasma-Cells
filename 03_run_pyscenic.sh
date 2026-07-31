@@ -1,59 +1,74 @@
 #!/usr/bin/env bash
+#SBATCH --job-name=pyscenic
+#SBATCH --array=0-15
+#SBATCH --cpus-per-task=70
+#SBATCH --mem=128G
+#SBATCH --time=24:00:00
+#SBATCH --output=pyscenic_out/logs/pyscenic_%A_%a.out
+#SBATCH --error=pyscenic_out/logs/pyscenic_%A_%a.err
+#
 # 03_run_pyscenic.sh
 #
-# Runs the 3-stage pySCENIC workflow (GRNBoost2 -> cisTarget -> AUCell)
-# separately for every donor x cell_type combination (16 runs for 8 donors x
-# {Memory_B, Plasma}), exactly as requested ("run pySCENIC on each individually").
+# This is an array array job: 16 tasks total (8 donors x 2 cell types).
+# Array index mapping:
+#   0-7  = Memory_B (BM1-BM8)
+#   8-15 = Plasma   (BM1-BM8)
 #
-# Requires: pyscenic installed, cisTarget feather rankings + motif annotation
-# tsv downloaded (https://resources.aertslab.org/cistarget/), and a TF list
-# (e.g. allTFs_hg38.txt from the same resource).
+
 #
 # Usage:
-#   ./03_run_pyscenic.sh ./celltype_out ./pyscenic_out \
-#       /path/to/hg38_TFs.txt \
-#       /path/to/hg38__refseq-r80__*.feather \
-#       /path/to/motifs-v10-nr.hgnc-m0.001-o0.0.tbl
+#   mkdir -p pyscenic_out/logs
+#   sbatch 03_run_pyscenic.sh
+
+module purge
+module load bluebear
+module load bear-apps/2024a
+module load pySCENIC/0.12.1-20250109-foss-2024a
+export PYTHONNOUSERSITE=1
 
 set -euo pipefail
-INDIR=$1
-OUTDIR=$2
-TF_LIST=$3
-RANKING_DB=$4   # can be a glob, quote it
-MOTIF_TBL=$5
 
-mkdir -p "$OUTDIR"
+#hardcoded paths
+CELLTYPE_DIR="/rds/projects/r/russdr-bb-data/wao597/celltype_out"
+OUTDIR="/rds/projects/r/russdr-bb-data/wao597/pyscenic_out"
+TF_LIST="/rds/projects/r/russdr-bb-data/wao597/data/hs_hgnc_curated_tfs.txt"
+RANKING_DB1="/rds/projects/r/russdr-bb-data/wao597/data/hg38_10kbp_up_10kbp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather"
+RANKING_DB2="/rds/projects/r/russdr-bb-data/wao597/data/hg38_500bp_up_100bp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather"
+MOTIF_TBL="/rds/projects/r/russdr-bb-data/wao597/data/motifs-v10nr_clust-nr.hgnc-m0.001-o0.0.tbl"
 
-for H5AD in "$INDIR"/*_Memory_B.h5ad "$INDIR"/*_Plasma.h5ad; do
-    NAME=$(basename "$H5AD" .h5ad)     # e.g. BM1_Memory_B
-    RUNDIR="$OUTDIR/$NAME"
-    mkdir -p "$RUNDIR"
+#array index - donor & cell type mapping
+DONORS=(BM1 BM2 BM3 BM4 BM5 BM6 BM7 BM8 BM1 BM2 BM3 BM4 BM5 BM6 BM7 BM8)
+CELLTYPES=(Memory_B Memory_B Memory_B Memory_B Memory_B Memory_B Memory_B Memory_B Plasma Plasma Plasma Plasma Plasma Plasma Plasma Plasma)
 
-    # pyscenic wants a loom file with raw counts
-    python - "$H5AD" "$RUNDIR/expr.loom" <<'PYEOF'
-import sys, scanpy as sc, loompy, numpy as np
-adata = sc.read_h5ad(sys.argv[1])
-X = adata.layers["counts"]
-row_attrs = {"Gene": np.array(adata.var_names)}
-col_attrs = {"CellID": np.array(adata.obs_names)}
-loompy.create(sys.argv[2], X.T.toarray() if hasattr(X, "toarray") else X.T,
-              row_attrs, col_attrs)
-PYEOF
+DONOR=${DONORS[$SLURM_ARRAY_TASK_ID]}
+CELLTYPE=${CELLTYPES[$SLURM_ARRAY_TASK_ID]}
+NAME="${DONOR}_${CELLTYPE}"
 
-    echo "=== $NAME: GRN inference ==="
-    pyscenic grn "$RUNDIR/expr.loom" "$TF_LIST" \
-        -o "$RUNDIR/adjacencies.tsv" \
-        --num_workers 8
+H5AD="${CELLTYPE_DIR}/${NAME}.h5ad"
+RUNDIR="${OUTDIR}/${NAME}"
 
-    echo "=== $NAME: cisTarget pruning ==="
-    pyscenic ctx "$RUNDIR/adjacencies.tsv" $RANKING_DB \
-        --annotations_fname "$MOTIF_TBL" \
-        --expression_mtx_fname "$RUNDIR/expr.loom" \
-        --output "$RUNDIR/regulons.csv" \
-        --num_workers 8
+mkdir -p "$RUNDIR"
+mkdir -p pyscenic_out/logs
 
-    echo "=== $NAME: AUCell scoring ==="
-    pyscenic aucell "$RUNDIR/expr.loom" "$RUNDIR/regulons.csv" \
-        -o "$RUNDIR/auc_mtx.csv" \
-        --num_workers 8
-done
+echo "=== Task $SLURM_ARRAY_TASK_ID: $NAME ==="
+
+# Double checking input exists
+if [[ ! -f "$H5AD" ]]; then
+    echo "ERROR: input not found: $H5AD" >&2
+    exit 1
+fi
+
+# 1. Convert h5ad to loom
+echo "=== $NAME: converting to loom ==="
+python 03_h5ad_to_loom.py "$H5AD" "$RUNDIR/expr.loom"
+
+#2. GRN inference (GRNBoost2)
+pyscenic grn "$RUNDIR/expr.loom" "$TF_LIST" -o "$RUNDIR/adjacencies.tsv" --num_workers ${SLURM_CPUS_PER_TASK:-16}
+
+#3: cisTarget pruning 
+pyscenic ctx "$RUNDIR/adjacencies.tsv" "$RANKING_DB1" "$RANKING_DB2" --annotations_fname "$MOTIF_TBL" --expression_mtx_fname "$RUNDIR/expr.loom" --output "$RUNDIR/regulons.csv" --num_workers ${SLURM_CPUS_PER_TASK:-16}
+
+#4: AUCell scoring 
+pyscenic aucell "$RUNDIR/expr.loom" "$RUNDIR/regulons.csv" -o "$RUNDIR/auc_mtx.csv" --num_workers ${SLURM_CPUS_PER_TASK:-16}
+
+
