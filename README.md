@@ -26,7 +26,7 @@ Motif table: motifs-v10nr_clust-nr.hgnc-m0.001-o0.0.tbl
 **Scripts:**
 
 
-Scripts should be run in the following order. Each step depends on the outputs of the previous step.
+Scripts should be run in the following order as some steps depend on the outputs of the previous step.
 
 
 Step 0:  00_run_cellranger.sh           - filtered_feature_bc_matrix.h5 + BAM per donor
@@ -64,4 +64,4 @@ Step 8:  08_run_network_focused.sh      - network_out/ (BACH2 + ATF4 network PNG
 Step 9: 10_run_overlap.sh               - overlap_out/ (overlap CSVs + figures)
 
 
-Step 10: Run visualisation scripts      - figure PNGs for dissertation
+Step 10: Run visualisation scripts      - top_de_barplot/ run_umap scripts 
