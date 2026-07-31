@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-01_qc.py
-Per-donor QC on raw CellRanger output -> filtered, normalised, clustered AnnData.
+This script performs Per-donor QC on raw data. 
+It loads each donor's filtered feature-barcode matrix. Calculates per-cell QC metrics including number of genes detected, total UMI count, and percentage of reads mapping to mitochondrial genes. Filters cells to retain those with 200–6,000 genes detected and less than 10% mitochondrial reads. Removes genes detected in fewer than 3 cells. Applies log-normalisation with scale factor 10,000.  Run as an 8-task SLURM array jo
 
 Usage:
     python 01_qc.py --cellranger_dir /path/to/cellranger_outs --donor BM1 \
@@ -24,25 +24,29 @@ def qc_one_donor(cellranger_dir, donor, sex, age, outdir,
     adata.obs["sex"] = sex
     adata.obs["age"] = age
 
-    # --- QC metrics ---
+    #QC Metrics
     adata.var["mt"] = adata.var_names.str.startswith("MT-")
     sc.pp.calculate_qc_metrics(adata, qc_vars=["mt"], inplace=True, percent_top=None)
 
-    # --- doublet detection (scrublet via scanpy) ---
-    sc.pp.scrublet(adata, expected_doublet_rate=expected_doublet_rate)
+    #Doublet detection
+    import scrublet as scr
+    scrub = scr.Scrublet(adata.X, expected_doublet_rate=expected_doublet_rate)
+    doublet_scores, predicted_doublets = scrub.scrub_doublets()
+    adata.obs["doublet_score"] = doublet_scores
+    adata.obs["predicted_doublet"] = predicted_doublets
 
-    # --- filtering ---
+    # Filtering
     adata = adata[adata.obs.n_genes_by_counts >= min_genes].copy()
     adata = adata[adata.obs.pct_counts_mt < max_pct_mt].copy()
     adata = adata[~adata.obs.predicted_doublet].copy()
     sc.pp.filter_genes(adata, min_cells=min_cells_gene)
 
-    # --- normalisation ---
+    # Normalisation 
     adata.layers["counts"] = adata.X.copy()  # keep raw counts for pySCENIC / pseudobulk later
     sc.pp.normalize_total(adata, target_sum=1e4)
     sc.pp.log1p(adata)
 
-    # --- HVG / dim reduction / clustering (for annotation in step 2) ---
+    #HVG / dim reduction / clustering
     sc.pp.highly_variable_genes(adata, n_top_genes=2000, flavor="seurat")
     adata.raw = adata
     sc.pp.pca(adata, n_comps=30, use_highly_variable=True)
