@@ -24,8 +24,5 @@ OUTDIR=$2
 
 mkdir -p "$OUTDIR"
 
-echo "=== Starting cell type annotation across all 8 donors ==="
-
 python 02_celltype_annotation.py --qc_dir "$QC_DIR" --outdir "$OUTDIR"
 
-echo "=== Cell type annotation complete ==="
