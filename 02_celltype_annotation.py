@@ -1,12 +1,8 @@
 #!/usr/bin/env python
 """
 02_celltype_annotation.py
-This script merges Azimuth labels  back into the QC'd h5ad files then:
-  - Filters to high-confidence cells (predicted.celltype.l2.score > 0.5)
-  - Subsets to Memory B cells and Plasma cells
-  - Writes per-donor/per-celltype h5ads for pySCENIC
-  - Writes combined_annotated.h5ad for pseudobulk DE
-  - Generates EDA plots
+ 
+This script concatenates all 8 QC'd donor h5ads, scores Memory B cell vs Plasma cell marker sets per Leiden cluster, assign labels, subset to those two cell types only then write per-donor, per-celltype h5ads. EDA: cell-type proportions and PCA by sex/age (saved as pics).
 
 Usage:
     python 02_celltype_annotation.py --qc_dir ./qc_out --outdir ./celltype_out
@@ -21,9 +17,8 @@ import matplotlib.pyplot as plt
 # Canonical marker sets
 MEMORY_B_MARKERS = ["MS4A1", "CD19", "CD27", "CD79A", "CD79B", "TNFRSF13B", "IGHD"]
 PLASMA_MARKERS = ["MZB1", "SDC1", "XBP1", "PRDM1", "IRF4", "JCHAIN", "CD38"]
-# Note: in scoring, IGHD is *low* in memory B relative to naive; CD19/MS4A1 should be
-# high in memory B and low/absent in plasma cells - inspect the score difference per
-# cluster rather than a single cutoff.
+
+
 
 
 def annotate(adata):
@@ -56,7 +51,7 @@ def main(qc_dir, outdir):
 
     combined = adatas[0].concatenate(*adatas[1:], batch_key="donor_batch", index_unique="-")
 
-    # --- EDA: cell type proportions by sex/age ---
+    #EDA: cell type proportions by sex/age
     props = (combined.obs.groupby(["donor", "sex", "age", "cell_type"]).size()
              .reset_index(name="n_cells"))
     props["frac"] = props["n_cells"] / props.groupby("donor")["n_cells"].transform("sum")
@@ -71,10 +66,11 @@ def main(qc_dir, outdir):
     ax.legend()
     fig.savefig(f"{outdir}/celltype_fraction_vs_age.png", dpi=150, bbox_inches="tight")
 
-    sc.pl.pca(combined, color=["sex", "age", "cell_type"], save="_sex_age_celltype.png",
-               show=False)
+    sc.settings.figdir = outdir
+    sc.pl.pca(combined, color=["sex", "age", "cell_type"], save="_sex_age_celltype.png", show=False)
+    sc.pl.umap(combined, color=["cell_type", "sex", "age", "donor"], save="_celltype_sex_age_donor.png", show=False)
 
-    # --- subset & write per donor x cell type, for pySCENIC ---
+    # Writing per donor x cell type, for pySCENIC
     for donor in combined.obs.donor.unique():
         for ct in ["Memory_B", "Plasma"]:
             sub = combined[(combined.obs.donor == donor) & (combined.obs.cell_type == ct)].copy()
