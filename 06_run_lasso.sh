@@ -28,7 +28,7 @@ module load scanpy/1.9.8-foss-2024a
 
 set -euo pipefail
 
-# PRDM1 is the default TF bit specify if investigating another
+# PRDM1 is the default TF but specify if investigating another
 TF=${1:-PRDM1}
 
 BALANCED_H5AD="/rds/projects/r/russdr-bb-data/wao597/pseudobulk_out/balanced_cells.h5ad"
@@ -37,9 +37,7 @@ OUTDIR="/rds/projects/r/russdr-bb-data/wao597/lasso_out/${TF}"
 mkdir -p "$OUTDIR"
 mkdir -p lasso_out
 
-echo "=== Lasso model for TF: $TF ==="
-echo "=== Output dir: $OUTDIR ==="
 
 python 06_lasso_tf_model.py --balanced_h5ad "$BALANCED_H5AD" --tf "$TF" --outdir "$OUTDIR"
 
-echo "=== Lasso complete for $TF ==="
+
