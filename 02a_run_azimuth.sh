@@ -10,7 +10,7 @@
 #
 # 02a_run_azimuth.sh
 #
-# Array job: one task per donor (8 donors -> --array=0-7)
+# This is an array job so one task per donor (8 donors - array=0-7)
 
 # To use:
 #   mkdir -p azimuth_out/logs
